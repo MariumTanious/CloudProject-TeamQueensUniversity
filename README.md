@@ -1,3 +1,4 @@
+```markdown
 # CISC 886 — Biomedical Research Chatbot
 
 > An end-to-end cloud-based biomedical question-answering chatbot built on AWS —
@@ -68,3 +69,133 @@ treating each stage as an independent, reproducible unit.
 | **IaC Tool**            | Terraform (VPC, subnets, security groups, EC2)                                |
 
 ### Architecture Overview
+
+```
+HuggingFace PubMed Stream
+        |
+        v
+  [Phase 1]  download_pubmed.py
+  Snappy Parquet --> S3 raw/
+        |
+        v
+  [Phase 2]  spark_preprocess.py  (AWS EMR)
+  Cleaned & formatted Parquet --> S3 processed/
+        |
+        v
+  [Phase 3]  finetune_tinyllama.ipynb  (Google Colab GPU)
+  LoRA fine-tuning --> GGUF q4_k_m --> S3 fine-tuned-models/
+        |
+        v
+  [Phase 4]  setup_ec2.sh  (Terraform + EC2 m5.xlarge)
+  Ollama (port 11434) + Open WebUI Docker (port 8080)
+        |
+        v
+       Biomedical Research Chatbot
+```
+
+---
+
+## Repository Structure
+
+```
+CloudProject-Team19/
+|
+|-- README.md                        # You are here
+|-- .gitignore                       # Python, Terraform, Jupyter ignore rules
+|-- requirements.txt                 # Python dependencies for local scripts
+|
+|-- terraform/                       # Infrastructure as Code
+|   |-- main.tf                      # VPC, subnets, security groups, EC2 instance
+|   |-- variables.tf                 # Input variable declarations
+|   |-- outputs.tf                   # EC2 public IP, instance ID outputs
+|   `-- terraform.tfvars.example     # Example variable values (copy -> .tfvars)
+|
+|-- spark/                           # Data pipeline scripts
+|   |-- download_pubmed.py           # Phase 1: Stream PubMed -> S3 raw Parquet
+|   `-- spark_preprocess.py          # Phase 2: EMR Spark preprocessing -> S3 processed
+|
+|-- finetuning/                      # Model training
+|   |-- finetune_tinyllama.ipynb     # Phase 3: LoRA fine-tuning notebook (Colab)
+|   `-- README.md                    # Colab-specific setup and usage instructions
+|
+|-- deployment/                      # EC2 deployment automation
+|   `-- setup_ec2.sh                 # Phase 4: Full EC2 bootstrap script
+|
+`-- docs/                            # Supplementary documentation
+    |-- architecture.md              # Detailed architecture diagrams & decisions
+    `-- troubleshooting.md           # Extended troubleshooting guide
+```
+
+---
+
+## Prerequisites
+
+### Local Tools
+
+Ensure the following tools are installed on your local machine before running any phase:
+
+| Tool              | Recommended Version | Purpose                                          |
+|-------------------|---------------------|--------------------------------------------------|
+| Python            | 3.10.x              | Data ingestion scripts, local testing            |
+| pip               | 23.x+               | Python package management                        |
+| AWS CLI           | 2.x                 | S3 uploads, EMR job submission, EC2 interaction  |
+| Terraform         | 1.7.x+              | Provision AWS infrastructure                     |
+| Git               | 2.x+                | Clone and version control                        |
+| Docker (optional) | 24.x+               | Local Open WebUI testing                         |
+| Ollama (optional) | 0.1.x+              | Local model serving / testing                    |
+
+> **Note:** The fine-tuning notebook (`finetuning/finetune_tinyllama.ipynb`) is designed for
+> **Google Colab with a GPU runtime** (T4 or better). Running it locally requires a CUDA-capable
+> GPU with at least 12 GB VRAM.
+
+---
+
+### Accounts & Access
+
+| Service          | Requirement                                                              |
+|------------------|--------------------------------------------------------------------------|
+| AWS Account      | IAM user/role with S3, EC2, and EMR permissions                          |
+| AWS S3           | A bucket named `q1abc-cisc886-bucket` (or update paths in all scripts)   |
+| AWS EMR          | EMR cluster with PySpark 3.x (Hadoop 3.x) in `us-east-1`                |
+| Google Account   | Required for Google Colab GPU runtime access                             |
+| HuggingFace Hub  | No token required; `ncbi/pubmed` is publicly accessible (streaming)      |
+
+---
+
+### Environment Requirements
+
+```bash
+# 1. Clone the repository
+git clone https://github.com/<your-org>/CloudProject-Team19.git
+cd CloudProject-Team19
+
+# 2. Create and activate a Python virtual environment
+python3.10 -m venv venv
+source venv/bin/activate          # macOS / Linux
+# venv\Scripts\activate           # Windows
+
+# 3. Install Python dependencies
+pip install --upgrade pip
+pip install -r requirements.txt
+
+# 4. Configure AWS credentials
+aws configure
+# Enter: AWS Access Key ID, Secret Access Key, Region (us-east-1), Output format (json)
+
+# 5. Verify S3 bucket access
+aws s3 ls s3://q1abc-cisc886-bucket/
+```
+
+> **Security Warning:** Never commit `terraform.tfvars`, `.env` files, or AWS credentials
+> to version control. The `.gitignore` excludes these by default. Rotate any accidentally
+> exposed keys immediately.
+
+---
+
+<div align="center">
+
+Made with dedication by **Team 19** — CISC 886 Cloud Computing  
+Queen's University · 2026
+
+</div>
+```
